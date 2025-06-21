@@ -2,280 +2,304 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>360 Issue Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <title>QC Review Dashboard</title>
+  <link rel="icon" href="https://spyne-prod-ai.s3.us-east-1.amazonaws.com/ai-dataset/2025/favicon.ico" type="image/x-icon" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     body {
-      font-family: 'Inter', sans-serif;
-      background: #f0f2f5;
-      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
+      padding: 0;
+      background: #f4f7fa;
+      color: #333;
     }
-    h2 { font-weight: 600; margin-bottom: 10px; color: #333; }
-    .filters, .summary { margin-top: 20px; background: #fff; padding: 15px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .filters { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
-    .filters label { font-size: 14px; color: #444; }
-    .filters select, .filters input[type="file"] { padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; min-width: 150px; }
-    .container { display: flex; gap: 20px; margin-top: 20px; }
-    .left-panel, .right-panel {
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-      padding: 10px;
-      height: 400px;
-      overflow-y: auto;
-    }
-    .left-panel { width: 40%; }
-    .right-panel { flex: 1; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #eee;
-      padding: 10px;
+
+    header {
+      background: #0057a3;
+      color: white;
+      padding: 0;
       text-align: center;
-      font-size: 14px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    th {
-      background-color: #f9fafb;
-      position: sticky;
-      top: 0;
-      z-index: 1;
+
+    header h1 {
+      margin: 10px 0;
+      font-size: 1.8em;
+    }
+
+    .container {
+      display: none;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1px;
+      gap: 1px;
+    }
+
+    .image-box {
+      flex: 1;
+      text-align: center;
+    }
+
+    .image-box img {
+      width: 100%;
+      height: auto;
+      max-height: 600px;
+      object-fit: contain;
+      margin-bottom: 5px;
+    }
+
+    .meta {
+      font-size: 0.95em;
+      color: #666;
+    }
+
+    .controls {
+      display: none;
+      margin: 30px auto;
+      text-align: center;
+    }
+
+    .status-group {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-group label {
+      font-size: 1rem;
+      background: #e9f0f7;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .status-group input[type="radio"] {
+      margin-right: 8px;
+    }
+
+    .status-group label:hover {
+      background: #d0e5f5;
+    }
+
+    button {
+      padding: 12px 25px;
+      font-size: 1rem;
+      background-color: #0073e6;
+      color: white;
+      border: none;
+      border-radius: 6px;
       cursor: pointer;
     }
-    th:hover { background: #e8f0fe; }
-    tr:hover { background-color: #f4f8fc; }
+
+    button:hover {
+      background-color: #005bb5;
+    }
+
+    .progress {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 1.1rem;
+      color: #444;
+    }
+
     iframe {
-      width: 100%;
-      height: 500px;
-      border: none;
       display: none;
-      margin-top: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
-    h3 {
-      font-weight: 600;
-      color: #2c3e50;
-      margin-top: 30px;
-      margin-bottom: 10px;
+
+    #loginScreen {
+      text-align: center;
+      margin-top: 50px;
     }
-    td b { color: #2c3e50; }
-    .sortable::after {
-      content: " ⇅";
-      font-size: 12px;
-      color: #999;
-    }
-    .asc::after {
-      content: " 🔼";
-    }
-    .desc::after {
-      content: " 🔽";
+
+    #loginScreen select {
+      padding: 10px;
+      font-size: 1em;
     }
   </style>
 </head>
 <body>
-  <h2>360 Issue Dashboard</h2>
 
-  <div class="filters">
-    <label>Upload QC File:</label>
-    <input type="file" id="uploadQC" accept=".xlsx,.xls,.csv" />
-    <label>Upload Total File:</label>
-    <input type="file" id="uploadTotal" accept=".xlsx,.xls,.csv" />
-    <label>Month:</label><select id="monthFilter"><option value="">All</option></select>
-    <label>Severity:</label><select id="severityFilter"><option value="">All</option></select>
-    <label>Issue:</label><select id="issueFilter"><option value="">All</option></select>
-    <label>QC:</label><select id="qcFilter"><option value="">All</option></select>
-    <label>Enterprise:</label><select id="enterpriseFilter"><option value="">All</option></select>
-    <label>Product Type:</label><select id="productTypeFilter"><option value="">All</option></select>
+<header>
+  <h1>Image QC Review Dashboard</h1>
+</header>
+
+<p id="progressText" class="progress"></p>
+<p id="loggedEmail" class="progress"></p>
+
+<div id="loginScreen">
+  <h2>Login to Start QC Review</h2>
+  <select id="emailInput">
+    <option value="" disabled selected>Select your email ID</option>
+    <option value="samir.ansari@spyne.co.in">samir.ansari@spyne.co.in</option>
+    <option value="ajay.prajapati@spyne.co.in">ajay.prajapati@spyne.co.in</option>
+    <option value="sneha.swami@spyne.co.in">sneha.swami@spyne.co.in</option>
+    <option value="rahul.kumar1@spyne.co.in">rahul.kumar1@spyne.co.in</option>
+  </select>
+  <br><br>
+  <button onclick="login()">Start Review</button>
+</div>
+
+<div class="container" id="imageContainer">
+  <div class="image-box">
+    <h3>Input Image</h3>
+    <img id="inputImg" loading="lazy" alt="Input Image">
+    <div class="meta">Image ID: <span id="imgId">-</span></div>
   </div>
-
-  <div class="summary">
-    <div>Total Unique Spins: <span id="spinCount">0</span> |
-    Total Spins (from Total file): <span id="totalCount">0</span></div>
-    <div id="severityPercentages" style="margin-top: 20px;"></div>
+  <div class="image-box">
+    <h3>Output Image</h3>
+    <img id="outputImg" loading="lazy" alt="Output Image">
+    <div class="meta">SKU ID: <span id="skuId">-</span></div>
   </div>
+</div>
 
-  <div class="container">
-    <div class="left-panel">
-      <table id="dataTable">
-        <thead><tr><th>Spin ID</th><th>Issue</th><th>Severity</th><th>Enterprise</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="right-panel">
-      <h3>Issue % (Based on Total Spins)</h3>
-      <div id="issueSummaryBox"></div>
-    </div>
+<div class="controls" id="controlPanel">
+  <div class="status-group">
+    <label><input type="radio" name="status" value="Done">1 - Done</label>
+    <label><input type="radio" name="status" value="Cropped">2 - Cropped</label>
+    <label><input type="radio" name="status" value="Marketing Material">3 - Marketing Material</label>
+    <label><input type="radio" name="status" value="Banner">4 - Banner</label>
+    <label><input type="radio" name="status" value="Vehicle Overlapped">5 - Vehicle Overlapped</label>
+    <label><input type="radio" name="status" value="Editing">6 - Editing</label>
   </div>
+  <button onclick="submitForm()">Next</button>
+</div>
 
-  <iframe id="spinIframe"></iframe>
+<iframe id="hiddenSubmitFrame" name="hiddenSubmitFrame"></iframe>
+
 <script>
-let rawData = [], totalData = [], lastTotalSpinCount = 1;
-let sortColumn = null, sortDirection = 'desc';
+  const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSrxjy4JG6xuSjNr57wmDI7SecAI2PSFonGooDa7P9lnMCll-Gh-Hs917tzZhwvxhFrtOiEHkRiGPhq/pub?gid=0&single=true&output=csv";
+  let data = [];
+  let currentIndex = 0;
+  let userEmail = "";
 
-const filters = [
-  { key: 'Month', id: 'monthFilter' },
-  { key: 'Severity', id: 'severityFilter' },
-  { key: 'Issue', id: 'issueFilter' },
-  { key: 'QC', id: 'qcFilter' },
-  { key: 'Enterprise', id: 'enterpriseFilter' },
-  { key: 'Product_Type', id: 'productTypeFilter' }
-];
+  function login() {
+    const emailInput = document.getElementById("emailInput");
+    userEmail = emailInput.value.trim();
 
-document.getElementById('uploadQC').addEventListener('change', e => handleUpload(e.target.files[0], 'qc'));
-document.getElementById('uploadTotal').addEventListener('change', e => handleUpload(e.target.files[0], 'total'));
+    if (!userEmail || !userEmail.includes("@")) {
+      alert("Please select a valid email ID.");
+      return;
+    }
 
-function getFilterValues() {
-  const f = {};
-  filters.forEach(({ key, id }) => f[key] = document.getElementById(id).value);
-  return f;
-}
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("progressText").innerText = "📦 Loading data...";
+    document.getElementById("loggedEmail").innerText = `👤 Logged in as: ${userEmail}`;
+    loadCSVData();
+  }
 
-function handleUpload(file, type) {
-  const reader = new FileReader();
-  reader.onload = function (e) {
-    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-    const sheet = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }).map(row => {
-      const obj = {};
-      Object.keys(row).forEach(k => obj[k.trim()] = row[k]);
-      if (obj['Month']) {
-        const d = new Date(obj['Month']);
-        if (!isNaN(d)) obj['Month'] = d.toLocaleString('default', { month: 'long' });
-      }
-      return obj;
-    });
-    if (type === 'qc') rawData = sheet;
-    else totalData = sheet;
-    populateDropdowns([...rawData, ...totalData]);
-    renderTable(filterData(rawData));
-    updateSummary();
-  };
-  reader.readAsArrayBuffer(file);
-}
+  function loadCSVData() {
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      complete: function(results) {
+        data = results.data.filter(row => {
+          const status = (row.status || '').trim().toLowerCase();
+          return !["done", "cropped", "marketing material", "banner", "vehicle overlapped", "editing"].includes(status);
+        });
 
-function populateDropdowns(data) {
-  filters.forEach(({ key, id }) => {
-    const sel = document.getElementById(id);
-    const values = [...new Set(data.map(r => r[key]).filter(Boolean))];
-    sel.innerHTML = `<option value="">All</option>` + values.map(v => `<option value="${v}">${v}</option>`).join('');
-    sel.onchange = () => {
-      renderTable(filterData(rawData));
-      updateSummary();
-    };
-  });
-}
-
-function filterData(data) {
-  const f = getFilterValues();
-  return data.filter(row =>
-    (!f.Month || row['Month'] === f.Month) &&
-    (!f.Severity || row['Severity'] === f.Severity) &&
-    (!f.Issue || row['Issue'] === f.Issue) &&
-    (!f.QC || row['QC'] === f.QC) &&
-    (!f.Enterprise || row['Enterprise'] === f.Enterprise) &&
-    (!f.Product_Type || row['Product_Type'] === f.Product_Type)
-  );
-}
-
-function renderTable(data) {
-  const tbody = document.querySelector('#dataTable tbody');
-  const iframe = document.getElementById('spinIframe');
-  tbody.innerHTML = '';
-  const spins = new Set();
-
-  data.forEach(row => {
-    const id = row['Spin_id'] || '';
-    if (id) spins.add(id);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="color:blue;text-decoration:underline;">${id}</td>
-      <td>${row['Issue'] || ''}</td>
-      <td>${row['Severity'] || ''}</td>
-      <td>${row['Enterprise'] || ''}</td>`;
-    tr.onclick = () => {
-      if (row['Spin']) {
-        iframe.src = row['Spin'];
-        iframe.style.display = 'block';
-      }
-    };
-    tbody.appendChild(tr);
-  });
-  document.getElementById('spinCount').textContent = spins.size;
-}
-
-function updateSummary() {
-  const f = getFilterValues();
-  const qc = filterData(rawData), total = filterData(totalData);
-  const spinIdKey = total[0] ? Object.keys(total[0]).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === 'spinid') : null;
-  const spinSet = new Set(spinIdKey ? total.map(r => (r[spinIdKey] || '').trim()).filter(Boolean) : []);
-  lastTotalSpinCount = spinSet.size;
-  document.getElementById('totalCount').textContent = spinSet.size;
-
-  const stats = {};
-  qc.forEach(row => {
-    const issue = row['Issue'] || 'Unknown';
-    const sev = row['Severity'] || 'Other';
-    if (!stats[issue]) stats[issue] = { total: 0, Blocker: 0, High: 0, Low: 0 };
-    stats[issue][sev]++;
-    stats[issue].total++;
-  });
-
-  let rows = Object.entries(stats).map(([issue, s]) => {
-    const totalCount = s.total || 1;
-    return {
-      Issue: issue,
-      Total: ((totalCount / lastTotalSpinCount) * 100).toFixed(2),
-      TotalCount: totalCount,
-      Blocker: `${((s.Blocker || 0) / totalCount * 100).toFixed(2)}% (${s.Blocker || 0})`,
-      High: `${((s.High || 0) / totalCount * 100).toFixed(2)}% (${s.High || 0})`,
-      Low: `${((s.Low || 0) / totalCount * 100).toFixed(2)}% (${s.Low || 0})`
-    };
-  });
-
-  if (sortColumn) {
-    rows.sort((a, b) => {
-      let valA = a[sortColumn], valB = b[sortColumn];
-      if (sortColumn === 'Issue') {
-        return sortDirection === 'asc'
-          ? valA.localeCompare(valB)
-          : valB.localeCompare(valA);
-      } else {
-        valA = parseFloat(valA);
-        valB = parseFloat(valB);
-        return sortDirection === 'asc' ? valA - valB : valB - valA;
+        if (data.length === 0) {
+          document.getElementById("progressText").innerText = "✅ All SKUs are already reviewed. No SKU left.";
+        } else {
+          document.getElementById("imageContainer").style.display = "flex";
+          document.getElementById("controlPanel").style.display = "block";
+          document.getElementById("progressText").innerText = "";
+          showImage();
+          preloadNextImages();
+        }
       }
     });
   }
 
-  const headers = [
-    { key: 'Issue', label: 'Issue' },
-    { key: 'Total', label: 'Total %' },
-    { key: 'Blocker', label: 'Blocker' },
-    { key: 'High', label: 'High' },
-    { key: 'Low', label: 'Low' }
-  ];
+  function showImage() {
+    if (currentIndex >= data.length) {
+      document.getElementById("progressText").innerText = `🎉 You reviewed ${data.length} SKUs!`;
+      document.getElementById("imageContainer").style.display = "none";
+      document.getElementById("controlPanel").style.display = "none";
+      return;
+    }
 
-  const thead = `<tr>${headers.map(h => `<th class="sortable ${h.key === sortColumn ? sortDirection : ''}" onclick="sortTable('${h.key}')">${h.label}</th>`).join('')}</tr>`;
-  const tbody = rows.map(row =>
-    `<tr><td>${row.Issue}</td><td><b>${row.Total}%</b> (${row.TotalCount})</td><td>${row.Blocker}</td><td>${row.High}</td><td>${row.Low}</td></tr>`
-  ).join('');
-
-  document.getElementById('issueSummaryBox').innerHTML = `<table border="1">${thead}${tbody}</table>`;
-}
-
-function sortTable(column) {
-  if (sortColumn === column) {
-    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-  } else {
-    sortColumn = column;
-    sortDirection = 'desc';
+    const row = data[currentIndex];
+    document.getElementById("inputImg").src = row["input_image_hres_url"];
+    document.getElementById("outputImg").src = row["output_image_hres_url"];
+    document.getElementById("imgId").innerText = row["image_id"];
+    document.getElementById("skuId").innerText = row["sku_id"];
+    preloadNextImages();
   }
-  updateSummary();
-}
+
+  function submitForm() {
+    if (!userEmail || !userEmail.includes("@")) {
+      alert("You are not logged in. Please refresh and log in.");
+      return;
+    }
+
+    const status = document.querySelector('input[name="status"]:checked');
+    if (!status) return alert("Please select a status.");
+
+    const row = data[currentIndex];
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://docs.google.com/forms/d/e/1FAIpQLSerZe2eJiPV7RVmdWgY_CMeA1WsK8oKxSfapnAgiHQAf-xn_g/formResponse';
+    form.target = 'hiddenSubmitFrame';
+
+    const fields = [
+      { name: 'entry.331138758', value: row["image_id"] },
+      { name: 'entry.921407097', value: row["sku_id"] },
+      { name: 'entry.2036611691', value: status.value },
+      { name: 'entry.1651774948', value: userEmail }
+    ];
+
+    fields.forEach(({ name, value }) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    currentIndex++;
+    showImage();
+    document.querySelectorAll('input[name="status"]').forEach(el => el.checked = false);
+  }
+
+  function preloadNextImages() {
+    for (let i = 1; i <= 3; i++) {
+      if (currentIndex + i < data.length) {
+        const nextRow = data[currentIndex + i];
+        new Image().src = nextRow["input_image_hres_url"];
+        new Image().src = nextRow["output_image_hres_url"];
+      }
+    }
+  }
+
+  document.addEventListener("keydown", function(event) {
+    const key = event.key.toLowerCase();
+    const code = event.code;
+
+    if (key === "1" || key === "d" || code === "Numpad1") {
+      document.querySelector('input[value="Done"]').checked = true;
+    } else if (key === "2" || key === "c" || code === "Numpad2") {
+      document.querySelector('input[value="Cropped"]').checked = true;
+    } else if (key === "3" || key === "m" || code === "Numpad3") {
+      document.querySelector('input[value="Marketing Material"]').checked = true;
+    } else if (key === "4" || key === "b" || code === "Numpad4") {
+      document.querySelector('input[value="Banner"]').checked = true;
+    } else if (key === "5" || key === "v" || code === "Numpad5") {
+      document.querySelector('input[value="Vehicle Overlapped"]').checked = true;
+    } else if (key === "6" || key === "e" || code === "Numpad6") {
+      document.querySelector('input[value="Editing"]').checked = true;
+    } else if (key === "enter") {
+      event.preventDefault();
+      submitForm();
+    }
+  });
 </script>
+
 </body>
 </html>
