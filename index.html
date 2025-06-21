@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>360 Issue Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+      margin: 0;
+    }
+    h2 { font-weight: 600; margin-bottom: 10px; color: #333; }
+    .filters, .summary { margin-top: 20px; background: #fff; padding: 15px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .filters { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+    .filters label { font-size: 14px; color: #444; }
+    .filters select, .filters input[type="file"] { padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; min-width: 150px; }
+    .container { display: flex; gap: 20px; margin-top: 20px; }
+    .left-panel, .right-panel {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      padding: 10px;
+      height: 400px;
+      overflow-y: auto;
+    }
+    .left-panel { width: 40%; }
+    .right-panel { flex: 1; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #eee;
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+    }
+    th {
+      background-color: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      cursor: pointer;
+    }
+    th:hover { background: #e8f0fe; }
+    tr:hover { background-color: #f4f8fc; }
+    iframe {
+      width: 100%;
+      height: 500px;
+      border: none;
+      display: none;
+      margin-top: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    h3 {
+      font-weight: 600;
+      color: #2c3e50;
+      margin-top: 30px;
+      margin-bottom: 10px;
+    }
+    td b { color: #2c3e50; }
+    .sortable::after {
+      content: " ⇅";
+      font-size: 12px;
+      color: #999;
+    }
+    .asc::after {
+      content: " 🔼";
+    }
+    .desc::after {
+      content: " 🔽";
+    }
+  </style>
+</head>
+<body>
+  <h2>360 Issue Dashboard</h2>
+
+  <div class="filters">
+    <label>Upload QC File:</label>
+    <input type="file" id="uploadQC" accept=".xlsx,.xls,.csv" />
+    <label>Upload Total File:</label>
+    <input type="file" id="uploadTotal" accept=".xlsx,.xls,.csv" />
+    <label>Month:</label><select id="monthFilter"><option value="">All</option></select>
+    <label>Severity:</label><select id="severityFilter"><option value="">All</option></select>
+    <label>Issue:</label><select id="issueFilter"><option value="">All</option></select>
+    <label>QC:</label><select id="qcFilter"><option value="">All</option></select>
+    <label>Enterprise:</label><select id="enterpriseFilter"><option value="">All</option></select>
+    <label>Product Type:</label><select id="productTypeFilter"><option value="">All</option></select>
+  </div>
+
+  <div class="summary">
+    <div>Total Unique Spins: <span id="spinCount">0</span> |
+    Total Spins (from Total file): <span id="totalCount">0</span></div>
+    <div id="severityPercentages" style="margin-top: 20px;"></div>
+  </div>
+
+  <div class="container">
+    <div class="left-panel">
+      <table id="dataTable">
+        <thead><tr><th>Spin ID</th><th>Issue</th><th>Severity</th><th>Enterprise</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="right-panel">
+      <h3>Issue % (Based on Total Spins)</h3>
+      <div id="issueSummaryBox"></div>
+    </div>
+  </div>
+
+  <iframe id="spinIframe"></iframe>
+<script>
+let rawData = [], totalData = [], lastTotalSpinCount = 1;
+let sortColumn = null, sortDirection = 'desc';
+
+const filters = [
+  { key: 'Month', id: 'monthFilter' },
+  { key: 'Severity', id: 'severityFilter' },
+  { key: 'Issue', id: 'issueFilter' },
+  { key: 'QC', id: 'qcFilter' },
+  { key: 'Enterprise', id: 'enterpriseFilter' },
+  { key: 'Product_Type', id: 'productTypeFilter' }
+];
+
+document.getElementById('uploadQC').addEventListener('change', e => handleUpload(e.target.files[0], 'qc'));
+document.getElementById('uploadTotal').addEventListener('change', e => handleUpload(e.target.files[0], 'total'));
+
+function getFilterValues() {
+  const f = {};
+  filters.forEach(({ key, id }) => f[key] = document.getElementById(id).value);
+  return f;
+}
+
+function handleUpload(file, type) {
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+    const sheet = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }).map(row => {
+      const obj = {};
+      Object.keys(row).forEach(k => obj[k.trim()] = row[k]);
+      if (obj['Month']) {
+        const d = new Date(obj['Month']);
+        if (!isNaN(d)) obj['Month'] = d.toLocaleString('default', { month: 'long' });
+      }
+      return obj;
+    });
+    if (type === 'qc') rawData = sheet;
+    else totalData = sheet;
+    populateDropdowns([...rawData, ...totalData]);
+    renderTable(filterData(rawData));
+    updateSummary();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function populateDropdowns(data) {
+  filters.forEach(({ key, id }) => {
+    const sel = document.getElementById(id);
+    const values = [...new Set(data.map(r => r[key]).filter(Boolean))];
+    sel.innerHTML = `<option value="">All</option>` + values.map(v => `<option value="${v}">${v}</option>`).join('');
+    sel.onchange = () => {
+      renderTable(filterData(rawData));
+      updateSummary();
+    };
+  });
+}
+
+function filterData(data) {
+  const f = getFilterValues();
+  return data.filter(row =>
+    (!f.Month || row['Month'] === f.Month) &&
+    (!f.Severity || row['Severity'] === f.Severity) &&
+    (!f.Issue || row['Issue'] === f.Issue) &&
+    (!f.QC || row['QC'] === f.QC) &&
+    (!f.Enterprise || row['Enterprise'] === f.Enterprise) &&
+    (!f.Product_Type || row['Product_Type'] === f.Product_Type)
+  );
+}
+
+function renderTable(data) {
+  const tbody = document.querySelector('#dataTable tbody');
+  const iframe = document.getElementById('spinIframe');
+  tbody.innerHTML = '';
+  const spins = new Set();
+
+  data.forEach(row => {
+    const id = row['Spin_id'] || '';
+    if (id) spins.add(id);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:blue;text-decoration:underline;">${id}</td>
+      <td>${row['Issue'] || ''}</td>
+      <td>${row['Severity'] || ''}</td>
+      <td>${row['Enterprise'] || ''}</td>`;
+    tr.onclick = () => {
+      if (row['Spin']) {
+        iframe.src = row['Spin'];
+        iframe.style.display = 'block';
+      }
+    };
+    tbody.appendChild(tr);
+  });
+  document.getElementById('spinCount').textContent = spins.size;
+}
+
+function updateSummary() {
+  const f = getFilterValues();
+  const qc = filterData(rawData), total = filterData(totalData);
+  const spinIdKey = total[0] ? Object.keys(total[0]).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === 'spinid') : null;
+  const spinSet = new Set(spinIdKey ? total.map(r => (r[spinIdKey] || '').trim()).filter(Boolean) : []);
+  lastTotalSpinCount = spinSet.size;
+  document.getElementById('totalCount').textContent = spinSet.size;
+
+  const stats = {};
+  qc.forEach(row => {
+    const issue = row['Issue'] || 'Unknown';
+    const sev = row['Severity'] || 'Other';
+    if (!stats[issue]) stats[issue] = { total: 0, Blocker: 0, High: 0, Low: 0 };
+    stats[issue][sev]++;
+    stats[issue].total++;
+  });
+
+  let rows = Object.entries(stats).map(([issue, s]) => {
+    const totalCount = s.total || 1;
+    return {
+      Issue: issue,
+      Total: ((totalCount / lastTotalSpinCount) * 100).toFixed(2),
+      TotalCount: totalCount,
+      Blocker: `${((s.Blocker || 0) / totalCount * 100).toFixed(2)}% (${s.Blocker || 0})`,
+      High: `${((s.High || 0) / totalCount * 100).toFixed(2)}% (${s.High || 0})`,
+      Low: `${((s.Low || 0) / totalCount * 100).toFixed(2)}% (${s.Low || 0})`
+    };
+  });
+
+  if (sortColumn) {
+    rows.sort((a, b) => {
+      let valA = a[sortColumn], valB = b[sortColumn];
+      if (sortColumn === 'Issue') {
+        return sortDirection === 'asc'
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      } else {
+        valA = parseFloat(valA);
+        valB = parseFloat(valB);
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+    });
+  }
+
+  const headers = [
+    { key: 'Issue', label: 'Issue' },
+    { key: 'Total', label: 'Total %' },
+    { key: 'Blocker', label: 'Blocker' },
+    { key: 'High', label: 'High' },
+    { key: 'Low', label: 'Low' }
+  ];
+
+  const thead = `<tr>${headers.map(h => `<th class="sortable ${h.key === sortColumn ? sortDirection : ''}" onclick="sortTable('${h.key}')">${h.label}</th>`).join('')}</tr>`;
+  const tbody = rows.map(row =>
+    `<tr><td>${row.Issue}</td><td><b>${row.Total}%</b> (${row.TotalCount})</td><td>${row.Blocker}</td><td>${row.High}</td><td>${row.Low}</td></tr>`
+  ).join('');
+
+  document.getElementById('issueSummaryBox').innerHTML = `<table border="1">${thead}${tbody}</table>`;
+}
+
+function sortTable(column) {
+  if (sortColumn === column) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortColumn = column;
+    sortDirection = 'desc';
+  }
+  updateSummary();
+}
+</script>
+</body>
+</html>
